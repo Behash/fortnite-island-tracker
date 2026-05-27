@@ -1,8 +1,8 @@
-name: Daily Fortnite Island Metrics
+name: Hourly Fortnite Island Metrics
 
 on:
   schedule:
-    - cron: "0 0 * * *"   # every day at 00:00 UTC
+    - cron: "0 * * * *"   # every hour on the hour (UTC)
   workflow_dispatch:        # allow manual runs from the Actions tab
 
 jobs:
@@ -24,7 +24,7 @@ jobs:
           python3 fortnite_island.py --island 9642-0223-9671 --start "$TODAY" --end "$TODAY" --csv island_metrics_history.csv
           python3 fortnite_island.py --island 9752-7422-1395 --start "$TODAY" --end "$TODAY" --csv island_metrics_history.csv
 
-      - name: Print today's summary
+      - name: Print summary
         run: python3 summary.py --top
 
       - name: Commit updated CSV
@@ -32,5 +32,5 @@ jobs:
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add island_metrics_history.csv
-          git diff --cached --quiet || git commit -m "chore: daily metrics $(date -u +%Y-%m-%d)"
+          git diff --cached --quiet || git commit -m "chore: hourly metrics $(date -u +%Y-%m-%dT%H:00:00)"
           git push
