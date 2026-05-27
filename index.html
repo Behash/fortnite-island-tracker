@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Fortnite Island Tracker — behash</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #0d0d12;
+      color: #e0e0e0;
+      min-height: 100vh;
+      padding: 24px 16px 48px;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 36px;
+    }
+    header h1 {
+      font-size: 1.8rem;
+      font-weight: 700;
+      color: #fff;
+      letter-spacing: -0.5px;
+    }
+    header p {
+      color: #888;
+      font-size: 0.85rem;
+      margin-top: 6px;
+    }
+    #updated { color: #555; font-size: 0.78rem; margin-top: 4px; }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 20px;
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    .card {
+      background: #16161e;
+      border: 1px solid #2a2a38;
+      border-radius: 12px;
+      padding: 20px 20px 16px;
+    }
+    .card h2 {
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #888;
+      margin-bottom: 14px;
+    }
+
+    .stat-row {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 28px;
+      max-width: 1400px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    .stat {
+      flex: 1 1 160px;
+      background: #16161e;
+      border: 1px solid #2a2a38;
+      border-radius: 10px;
+      padding: 16px 18px;
+    }
+    .stat .label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.07em; color: #666; }
+    .stat .val   { font-size: 1.5rem; font-weight: 700; color: #fff; margin-top: 4px; }
+    .stat .sub   { font-size: 0.75rem; color: #555; margin-top: 2px; }
+    .stat .delta { font-size: 0.78rem; margin-top: 4px; font-weight: 600; }
+    .up   { color: #4ade80; }
+    .down { color: #f87171; }
+
+    .island-header {
+      font-size: 1rem;
+      font-weight: 600;
+      color: #fff;
+      margin: 28px auto 12px;
+      max-width: 1400px;
+      padding-left: 4px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .pill {
+      display: inline-block;
+      font-size: 0.7rem;
+      padding: 2px 10px;
+      border-radius: 20px;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+    }
+    .pill-trio { background: #1e3a5f; color: #60a5fa; }
+    .pill-duo  { background: #2d1b4e; color: #c084fc; }
+
+    #error {
+      text-align: center;
+      color: #f87171;
+      padding: 40px;
+      display: none;
+    }
+    #loading {
+      text-align: center;
+      color: #555;
+      padding: 80px;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>🗺️ Fortnite Island Tracker</h1>
+  <p>Daily metrics for <strong>behash</strong>'s islands — auto-updated every midnight UTC</p>
+  <div id="updated"></div>
+</header>
+
+<div id="loading">Loading data…</div>
+<div id="error">Failed to load island_metrics_history.csv</div>
+<div id="app" style="display:none"></div>
+
+<script>
+const CSV_URL = "island_metrics_history.csv";
+
+const ISLANDS = {
+  "9642-0223-9671": { name: "PILLARS TRIO",  pill: "pill-trio", color: "#60a5fa" },
+  "9752-7422-1395": { name: "PILLARS DUO",   pill: "pill-duo",  color: "#c084fc" },
+};
+
+const CHART_METRICS = [
+  { key: "plays",                  label: "Plays (sessions)" },
+  { key: "unique_players",         label: "Unique Players" },
+  { key: "minutes_played",         label: "Minutes Played" },
+  { key: "peak_ccu",               label: "Peak CCU" },
+  { key: "avg_minutes_per_player", label: "Avg Min / Player" },
+  { key: "favorites",              label: "Favorites" },
+  { key: "retention_d1_pct",       label: "Retention D1 %" },
+  { key: "retention_d7_pct",       label: "Retention D7 %" },
+];
+
+const STAT_METRICS = [
+  { key: "plays",                  label: "Plays",          fmt: fmtNum },
+  { key: "unique_players",         label: "Unique Players", fmt: fmtNum },
+  { key: "peak_ccu",               label: "Peak CCU",       fmt: fmtNum },
+  { key: "avg_minutes_per_player", label: "Avg Min/Player", fmt: v => v.toFixed(1) + " min" },
+  { key: "retention_d1_pct",       label: "D1 Retention",  fmt: v => v.toFixed(1) + "%" },
+  { key: "retention_d7_pct",       label: "D7 Retention",  fmt: v => v.toFixed(1) + "%" },
+];
+
+function fmtNum(v) {
+  return v >= 1000 ? (v / 1000).toFixed(1) + "k" : String(Math.round(v));
+}
+
+function parseCSV(text) {
+  const lines = text.trim().split("\n");
+  const headers = lines[0].split(",");
+  return lines.slice(1).map(line => {
+    const vals = line.split(",");
+    const obj = {};
+    headers.forEach((h, i) => obj[h.trim()] = vals[i]?.trim() ?? "");
+    return obj;
+  });
+}
+
+function groupByIsland(rows) {
+  const islands = {};
+  for (const row of rows) {
+    const code = row.island_code;
+    if (!islands[code]) islands[code] = [];
+    islands[code].push(row);
+  }
+  for (const code in islands) {
+    islands[code].sort((a, b) => a.date.localeCompare(b.date));
+  }
+  return islands;
+}
+
+function pctChange(prev, curr) {
+  if (!prev || prev === 0) return null;
+  return ((curr - prev) / prev) * 100;
+}
+
+function renderStats(container, rows, color) {
+  const latest = rows[rows.length - 1];
+  const prev   = rows.length >= 2 ? rows[rows.length - 2] : null;
+
+  const row = document.createElement("div");
+  row.className = "stat-row";
+
+  for (const { key, label, fmt } of STAT_METRICS) {
+    const val  = parseFloat(latest[key]);
+    const pval = prev ? parseFloat(prev[key]) : null;
+    const pct  = pval != null ? pctChange(pval, val) : null;
+
+    const card = document.createElement("div");
+    card.className = "stat";
+    card.innerHTML = `
+      <div class="label">${label}</div>
+      <div class="val" style="color:${color}">${isNaN(val) ? "n/a" : fmt(val)}</div>
+      <div class="sub">${latest.date}</div>
+      ${pct != null ? `<div class="delta ${pct >= 0 ? "up" : "down"}">${pct >= 0 ? "▲" : "▼"} ${Math.abs(pct).toFixed(1)}% vs prev day</div>` : ""}
+    `;
+    row.appendChild(card);
+  }
+  container.appendChild(row);
+}
+
+function renderCharts(container, rows, color) {
+  const dates = rows.map(r => r.date);
+  const grid = document.createElement("div");
+  grid.className = "grid";
+
+  for (const { key, label } of CHART_METRICS) {
+    const values = rows.map(r => parseFloat(r[key]) || null);
+
+    const card = document.createElement("div");
+    card.className = "card";
+    card.innerHTML = `<h2>${label}</h2>`;
+    const canvas = document.createElement("canvas");
+    canvas.height = 140;
+    card.appendChild(canvas);
+    grid.appendChild(card);
+
+    new Chart(canvas, {
+      type: "line",
+      data: {
+        labels: dates,
+        datasets: [{
+          data: values,
+          borderColor: color,
+          backgroundColor: color + "22",
+          borderWidth: 2,
+          pointRadius: 4,
+          pointBackgroundColor: color,
+          tension: 0.3,
+          fill: true,
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: {
+            ticks: { color: "#555", font: { size: 10 }, maxRotation: 45 },
+            grid: { color: "#1e1e2a" },
+          },
+          y: {
+            ticks: { color: "#555", font: { size: 10 } },
+            grid: { color: "#1e1e2a" },
+            beginAtZero: true,
+          }
+        }
+      }
+    });
+  }
+  container.appendChild(grid);
+}
+
+function renderComparisonChart(container, byIsland) {
+  const codes = Object.keys(byIsland).sort();
+  if (codes.length < 2) return;
+
+  const header = document.createElement("div");
+  header.className = "island-header";
+  header.textContent = "Side-by-side Comparison";
+  container.appendChild(header);
+
+  const COMPARE = [
+    { key: "plays", label: "Plays" },
+    { key: "unique_players", label: "Unique Players" },
+    { key: "peak_ccu", label: "Peak CCU" },
+  ];
+
+  const grid = document.createElement("div");
+  grid.className = "grid";
+
+  for (const { key, label } of COMPARE) {
+    const allDates = [...new Set(codes.flatMap(c => byIsland[c].map(r => r.date)))].sort();
+
+    const card = document.createElement("div");
+    card.className = "card";
+    card.innerHTML = `<h2>${label} — all islands</h2>`;
+    const canvas = document.createElement("canvas");
+    canvas.height = 140;
+    card.appendChild(canvas);
+    grid.appendChild(card);
+
+    const datasets = codes.map(code => {
+      const meta = ISLANDS[code] || { name: code, color: "#aaa" };
+      const dataMap = Object.fromEntries(byIsland[code].map(r => [r.date, parseFloat(r[key]) || null]));
+      return {
+        label: meta.name,
+        data: allDates.map(d => dataMap[d] ?? null),
+        borderColor: meta.color,
+        backgroundColor: meta.color + "22",
+        borderWidth: 2,
+        pointRadius: 4,
+        pointBackgroundColor: meta.color,
+        tension: 0.3,
+        fill: false,
+      };
+    });
+
+    new Chart(canvas, {
+      type: "line",
+      data: { labels: allDates, datasets },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: {
+            display: true,
+            labels: { color: "#aaa", font: { size: 11 } }
+          }
+        },
+        scales: {
+          x: { ticks: { color: "#555", font: { size: 10 }, maxRotation: 45 }, grid: { color: "#1e1e2a" } },
+          y: { ticks: { color: "#555", font: { size: 10 } }, grid: { color: "#1e1e2a" }, beginAtZero: true }
+        }
+      }
+    });
+  }
+  container.appendChild(grid);
+}
+
+async function main() {
+  try {
+    const res = await fetch(CSV_URL);
+    if (!res.ok) throw new Error("fetch failed");
+    const text = await res.text();
+    const rows = parseCSV(text);
+    const byIsland = groupByIsland(rows);
+
+    document.getElementById("loading").style.display = "none";
+    const app = document.getElementById("app");
+    app.style.display = "block";
+
+    const allDates = rows.map(r => r.date).sort();
+    document.getElementById("updated").textContent =
+      `Data from ${allDates[0]} to ${allDates[allDates.length - 1]}`;
+
+    for (const code of Object.keys(byIsland).sort()) {
+      const meta = ISLANDS[code] || { name: code, pill: "", color: "#aaa" };
+      const islandRows = byIsland[code];
+
+      const h = document.createElement("div");
+      h.className = "island-header";
+      h.innerHTML = `${meta.name} <span class="pill ${meta.pill}">${code}</span>`;
+      app.appendChild(h);
+
+      renderStats(app, islandRows, meta.color);
+      renderCharts(app, islandRows, meta.color);
+    }
+
+    renderComparisonChart(app, byIsland);
+
+  } catch (e) {
+    document.getElementById("loading").style.display = "none";
+    document.getElementById("error").style.display = "block";
+  }
+}
+
+main();
+</script>
+</body>
+</html>
