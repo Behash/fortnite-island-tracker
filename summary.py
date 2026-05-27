@@ -32,12 +32,17 @@ def load_csv(path):
         print("Run: python3 fortnite_island.py --csv island_metrics_history.csv")
         sys.exit(1)
 
+    # Group by island → date, keeping the latest fetched_at per (island, date)
     islands = defaultdict(dict)
     with open(path, newline="") as f:
         for row in csv.DictReader(f):
             code = row["island_code"]
             d = row["date"]
-            islands[code][d] = row
+            fetched = row.get("fetched_at", d + "T00:00:00")
+            # Keep the most recently fetched snapshot for each day
+            if d not in islands[code] or fetched > islands[code][d].get("fetched_at", ""):
+                row["fetched_at"] = fetched
+                islands[code][d] = row
 
     return {code: dict(sorted(days.items())) for code, days in sorted(islands.items())}
 
