@@ -3,365 +3,528 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Fortnite Island Tracker — behash</title>
+  <title>Island Tracker — behash</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
+    :root {
+      --bg:        #0a0b0f;
+      --surface:   #111318;
+      --border:    #1e2130;
+      --border-hi: #2a2f42;
+      --text:      #e4e6ef;
+      --muted:     #5a5f78;
+      --peak:      #4a90d9;
+      --c-trio:    #00c3ff;
+      --c-duo:     #a855f7;
+      --c-ov:      #22c55e;
+    }
+    html { scroll-behavior: smooth; }
     body {
+      background: var(--bg);
+      color: var(--text);
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      background: #0d0d12;
-      color: #e0e0e0;
+      font-size: 14px;
       min-height: 100vh;
-      padding: 24px 16px 48px;
     }
 
-    header {
-      text-align: center;
-      margin-bottom: 36px;
-    }
-    header h1 {
-      font-size: 1.8rem;
-      font-weight: 700;
-      color: #fff;
-      letter-spacing: -0.5px;
-    }
-    header p {
-      color: #888;
-      font-size: 0.85rem;
-      margin-top: 6px;
-    }
-    #updated { color: #555; font-size: 0.78rem; margin-top: 4px; }
-
-    .grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-      gap: 20px;
-      max-width: 1400px;
-      margin: 0 auto;
-    }
-
-    .card {
-      background: #16161e;
-      border: 1px solid #2a2a38;
-      border-radius: 12px;
-      padding: 20px 20px 16px;
-    }
-    .card h2 {
-      font-size: 0.78rem;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      color: #888;
-      margin-bottom: 14px;
-    }
-
-    .stat-row {
-      display: flex;
-      gap: 12px;
-      flex-wrap: wrap;
-      margin-bottom: 28px;
-      max-width: 1400px;
-      margin-left: auto;
-      margin-right: auto;
-    }
-    .stat {
-      flex: 1 1 160px;
-      background: #16161e;
-      border: 1px solid #2a2a38;
-      border-radius: 10px;
-      padding: 16px 18px;
-    }
-    .stat .label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.07em; color: #666; }
-    .stat .val   { font-size: 1.5rem; font-weight: 700; color: #fff; margin-top: 4px; }
-    .stat .sub   { font-size: 0.75rem; color: #555; margin-top: 2px; }
-    .stat .delta { font-size: 0.78rem; margin-top: 4px; font-weight: 600; }
-    .up   { color: #4ade80; }
-    .down { color: #f87171; }
-
-    .island-header {
-      font-size: 1rem;
-      font-weight: 600;
-      color: #fff;
-      margin: 28px auto 12px;
-      max-width: 1400px;
-      padding-left: 4px;
+    /* ── Header ── */
+    .site-header {
+      background: #0d0e14;
+      border-bottom: 1px solid var(--border);
+      padding: 14px 24px;
       display: flex;
       align-items: center;
-      gap: 10px;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 100;
     }
-    .pill {
-      display: inline-block;
+    .site-header h1 { font-size: 1rem; font-weight: 700; letter-spacing: .04em; }
+    .site-header h1 span { color: var(--muted); font-weight: 400; }
+    #last-updated { font-size: 0.72rem; color: var(--muted); }
+
+    /* ── Page body ── */
+    .page { max-width: 1440px; margin: 0 auto; padding: 28px 20px 60px; }
+
+    /* ── Island section header ── */
+    .island-section { margin-bottom: 48px; }
+    .island-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .island-title-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .island-title h2 {
+      font-size: 1.1rem;
+      font-weight: 700;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+    }
+    .island-code {
       font-size: 0.7rem;
-      padding: 2px 10px;
+      padding: 3px 10px;
       border-radius: 20px;
       font-weight: 600;
-      letter-spacing: 0.05em;
+      letter-spacing: .05em;
     }
-    .pill-trio { background: #1e3a5f; color: #60a5fa; }
-    .pill-duo  { background: #2d1b4e; color: #c084fc; }
+    .trio .island-code { background: #0a2a3f; color: var(--c-trio); }
+    .duo  .island-code { background: #1a0a36; color: var(--c-duo);  }
 
-    #error {
-      text-align: center;
-      color: #f87171;
-      padding: 40px;
-      display: none;
+    /* ── Time filter buttons ── */
+    .time-filters { display: flex; gap: 4px; }
+    .tf-btn {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 0.72rem;
+      font-weight: 600;
+      padding: 5px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all .15s;
+      letter-spacing: .04em;
     }
-    #loading {
+    .tf-btn:hover { border-color: var(--border-hi); color: var(--text); }
+    .trio .tf-btn.active { background: #0a2a3f; border-color: var(--c-trio); color: var(--c-trio); }
+    .duo  .tf-btn.active { background: #1a0a36; border-color: var(--c-duo);  color: var(--c-duo);  }
+
+    /* ── Metric cards grid ── */
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 14px;
+    }
+    .metric-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px 18px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      transition: border-color .15s;
+    }
+    .metric-card:hover { border-color: var(--border-hi); }
+    .metric-card .mc-label {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: var(--muted);
+    }
+    .metric-card .mc-value {
+      font-size: 1.75rem;
+      font-weight: 700;
+      color: #fff;
+      line-height: 1.1;
+    }
+    .metric-card .mc-peak {
+      font-size: 0.72rem;
+      color: var(--muted);
+    }
+    .metric-card .mc-peak b { color: var(--peak); }
+    .metric-card .mc-chart { margin-top: 8px; }
+    .metric-card canvas { display: block; }
+
+    /* ── 24H Overview ── */
+    .overview-section {
+      margin: 0 0 48px;
+      padding: 20px 22px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+    }
+    .overview-section h2 {
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: .1em;
+      color: var(--c-ov);
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .overview-section h2::before {
+      content: '';
+      display: inline-block;
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--c-ov);
+    }
+    .overview-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap: 12px;
+    }
+    .ov-card {
+      background: #0d0e14;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px 14px;
+    }
+    .ov-card .ov-label {
+      font-size: 0.67rem;
+      text-transform: uppercase;
+      letter-spacing: .07em;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+    .ov-card .ov-value {
+      font-size: 1.3rem;
+      font-weight: 700;
+      color: #fff;
+    }
+    .ov-card .ov-sub {
+      font-size: 0.67rem;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+
+    /* ── Loading / Error ── */
+    #loading, #error-msg {
       text-align: center;
-      color: #555;
-      padding: 80px;
+      padding: 80px 20px;
+      color: var(--muted);
+    }
+    #error-msg { color: #f87171; display: none; }
+
+    /* ── Separator ── */
+    .section-divider {
+      height: 1px;
+      background: var(--border);
+      margin: 36px 0;
     }
   </style>
 </head>
 <body>
 
-<header>
-  <h1>🗺️ Fortnite Island Tracker</h1>
-  <p>Daily metrics for <strong>behash</strong>'s islands — auto-updated every midnight UTC</p>
-  <div id="updated"></div>
+<header class="site-header">
+  <h1>Island Tracker <span>/ behash</span></h1>
+  <div id="last-updated"></div>
 </header>
 
-<div id="loading">Loading data…</div>
-<div id="error">Failed to load island_metrics_history.csv</div>
-<div id="app" style="display:none"></div>
+<div class="page">
+  <div id="loading">Loading metrics…</div>
+  <div id="error-msg">Failed to load island_metrics_history.csv</div>
+  <div id="app" style="display:none"></div>
+</div>
 
 <script>
-const CSV_URL = "island_metrics_history.csv";
-
+/* ── Config ── */
 const ISLANDS = {
-  "9642-0223-9671": { name: "PILLARS TRIO",  pill: "pill-trio", color: "#60a5fa" },
-  "9752-7422-1395": { name: "PILLARS DUO",   pill: "pill-duo",  color: "#c084fc" },
+  "9642-0223-9671": { name: "PILLARS TRIO", cls: "trio", color: "#00c3ff" },
+  "9752-7422-1395": { name: "PILLARS DUO",  cls: "duo",  color: "#a855f7" },
 };
 
-const CHART_METRICS = [
-  { key: "plays",                  label: "Plays (sessions)" },
-  { key: "unique_players",         label: "Unique Players" },
-  { key: "minutes_played",         label: "Minutes Played" },
-  { key: "peak_ccu",               label: "Peak CCU" },
-  { key: "avg_minutes_per_player", label: "Avg Min / Player" },
-  { key: "favorites",              label: "Favorites" },
-  { key: "retention_d1_pct",       label: "Retention D1 %" },
-  { key: "retention_d7_pct",       label: "Retention D7 %" },
+const METRICS = [
+  { key: "unique_players",         label: "Unique Players",        fmt: fmtNum,  unit: "" },
+  { key: "plays",                  label: "Sessions",              fmt: fmtNum,  unit: "" },
+  { key: "minutes_played",         label: "Minutes Played",        fmt: fmtNum,  unit: "" },
+  { key: "peak_ccu",               label: "Peak CCU",              fmt: fmtNum,  unit: "" },
+  { key: "avg_minutes_per_player", label: "Avg Min / Player",      fmt: fmtDec,  unit: " min" },
+  { key: "favorites",              label: "Favorites",             fmt: fmtNum,  unit: "" },
+  { key: "retention_d1_pct",       label: "Day 1 Retention",       fmt: fmtPct,  unit: "%" },
+  { key: "retention_d7_pct",       label: "Day 7 Retention",       fmt: fmtPct,  unit: "%" },
 ];
 
-const STAT_METRICS = [
-  { key: "plays",                  label: "Plays",          fmt: fmtNum },
-  { key: "unique_players",         label: "Unique Players", fmt: fmtNum },
-  { key: "peak_ccu",               label: "Peak CCU",       fmt: fmtNum },
-  { key: "avg_minutes_per_player", label: "Avg Min/Player", fmt: v => v.toFixed(1) + " min" },
-  { key: "retention_d1_pct",       label: "D1 Retention",  fmt: v => v.toFixed(1) + "%" },
-  { key: "retention_d7_pct",       label: "D7 Retention",  fmt: v => v.toFixed(1) + "%" },
-];
+const RANGES = ["1H","1D","1W","1M","ALL"];
 
-function fmtNum(v) {
-  return v >= 1000 ? (v / 1000).toFixed(1) + "k" : String(Math.round(v));
+/* ── Formatters ── */
+function fmtNum(v)  { return v >= 1e6 ? (v/1e6).toFixed(2)+"M" : v >= 1e3 ? (v/1e3).toFixed(1)+"K" : String(Math.round(v)); }
+function fmtDec(v)  { return v.toFixed(2); }
+function fmtPct(v)  { return v.toFixed(1); }
+function fmtFull(v) { return v == null ? "n/a" : Number(v).toLocaleString(undefined, {maximumFractionDigits:2}); }
+
+/* ── CSV parser ── */
+function parseCSV(text) {
+  const [headerLine, ...lines] = text.trim().split("\n");
+  const headers = headerLine.split(",").map(h => h.trim());
+  return lines
+    .filter(l => l.trim())
+    .map(line => {
+      const vals = line.split(",");
+      const obj = {};
+      headers.forEach((h, i) => obj[h] = (vals[i] ?? "").trim());
+      return obj;
+    });
 }
 
-function parseCSV(text) {
-  const lines = text.trim().split("\n");
-  const headers = lines[0].split(",");
-  return lines.slice(1).map(line => {
-    const vals = line.split(",");
-    const obj = {};
-    headers.forEach((h, i) => obj[h.trim()] = vals[i]?.trim() ?? "");
-    return obj;
+/* ── Group rows by island, sorted by fetched_at ── */
+function groupByIsland(rows) {
+  const map = {};
+  for (const row of rows) {
+    const c = row.island_code;
+    if (!map[c]) map[c] = [];
+    map[c].push({ ...row, _ts: new Date(row.fetched_at || row.date).getTime() });
+  }
+  for (const c in map) map[c].sort((a, b) => a._ts - b._ts);
+  return map;
+}
+
+/* ── Filter rows by range ── */
+function filterRange(rows, range) {
+  if (!rows.length) return rows;
+  const latest = rows[rows.length - 1]._ts;
+  const MS = { "1H": 36e5, "1D": 864e5, "1W": 6048e5, "1M": 2592e6 };
+
+  if (range === "ALL") return dedupByDay(rows);
+  if (range === "1H")  return rows.filter(r => r._ts >= latest - MS["1H"]);
+  if (range === "1D")  return rows.filter(r => r._ts >= latest - MS["1D"]);
+  // 1W / 1M — deduplicate to one-per-day (latest snap)
+  const cutoff = latest - MS[range];
+  return dedupByDay(rows.filter(r => r._ts >= cutoff));
+}
+
+function dedupByDay(rows) {
+  const byDay = {};
+  for (const r of rows) {
+    const d = (r.fetched_at || r.date).slice(0, 10);
+    if (!byDay[d] || r._ts > byDay[d]._ts) byDay[d] = r;
+  }
+  return Object.values(byDay).sort((a,b) => a._ts - b._ts);
+}
+
+/* ── Chart label ── */
+function rowLabel(row, range) {
+  const s = row.fetched_at || row.date;
+  if (range === "1H" || range === "1D") {
+    return s.slice(11, 16) || s.slice(0, 10); // HH:MM
+  }
+  return s.slice(0, 10); // YYYY-MM-DD
+}
+
+/* ── Chart instance registry ── */
+const charts = {};
+function makeChart(canvasEl, labels, data, color) {
+  const id = canvasEl.dataset.cid;
+  if (charts[id]) { charts[id].destroy(); delete charts[id]; }
+
+  const hasData = data.some(v => v != null && v !== "");
+  if (!hasData) {
+    const ctx = canvasEl.getContext("2d");
+    ctx.clearRect(0, 0, canvasEl.width, canvasEl.height);
+    ctx.fillStyle = "#3a3f55";
+    ctx.font = "11px sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("Not enough data for this range", canvasEl.width/2, canvasEl.height/2);
+    return;
+  }
+
+  charts[id] = new Chart(canvasEl, {
+    type: "line",
+    data: {
+      labels,
+      datasets: [{
+        data: data.map(v => v === "" || v == null ? null : parseFloat(v)),
+        borderColor: color,
+        backgroundColor: color + "18",
+        borderWidth: 1.5,
+        pointRadius: data.length > 30 ? 0 : 3,
+        pointBackgroundColor: color,
+        tension: 0.3,
+        fill: true,
+        spanGaps: true,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      plugins: { legend: { display: false }, tooltip: {
+        callbacks: { label: ctx => " " + fmtFull(ctx.parsed.y) }
+      }},
+      scales: {
+        x: {
+          ticks: { color: "#4a4f68", font: { size: 9 }, maxRotation: 0, maxTicksLimit: 6 },
+          grid: { color: "#14151e" },
+          border: { display: false },
+        },
+        y: {
+          ticks: { color: "#4a4f68", font: { size: 9 }, maxTicksLimit: 4 },
+          grid: { color: "#14151e" },
+          border: { display: false },
+          beginAtZero: false,
+        }
+      }
+    }
   });
 }
 
-function groupByIsland(rows) {
-  const islands = {};
-  for (const row of rows) {
-    const code = row.island_code;
-    if (!islands[code]) islands[code] = [];
-    islands[code].push(row);
+/* ── Build per-island metric cards ── */
+function buildIslandSection(code, rows, container) {
+  const meta = ISLANDS[code] || { name: code, cls: "", color: "#aaa" };
+  let activeRange = "1D";
+
+  // Section wrapper
+  const section = document.createElement("div");
+  section.className = `island-section ${meta.cls}`;
+
+  // Title bar
+  section.innerHTML = `
+    <div class="island-title">
+      <div class="island-title-left">
+        <h2 style="color:${meta.color}">${meta.name}</h2>
+        <span class="island-code">${code}</span>
+      </div>
+      <div class="time-filters">
+        ${RANGES.map(r => `<button class="tf-btn${r===activeRange?" active":""}" data-range="${r}">${r}</button>`).join("")}
+      </div>
+    </div>
+    <div class="metrics-grid"></div>
+  `;
+  container.appendChild(section);
+
+  const grid = section.querySelector(".metrics-grid");
+
+  // Compute all-time peaks
+  const peaks = {};
+  for (const m of METRICS) {
+    let pk = -Infinity, pkDate = "";
+    for (const r of rows) {
+      const v = parseFloat(r[m.key]);
+      if (!isNaN(v) && v > pk) { pk = v; pkDate = (r.fetched_at || r.date).slice(0,10); }
+    }
+    peaks[m.key] = { val: pk === -Infinity ? null : pk, date: pkDate };
   }
-  for (const code in islands) {
-    islands[code].sort((a, b) => a.date.localeCompare(b.date));
-  }
-  return islands;
-}
 
-function pctChange(prev, curr) {
-  if (!prev || prev === 0) return null;
-  return ((curr - prev) / prev) * 100;
-}
-
-function renderStats(container, rows, color) {
-  const latest = rows[rows.length - 1];
-  const prev   = rows.length >= 2 ? rows[rows.length - 2] : null;
-
-  const row = document.createElement("div");
-  row.className = "stat-row";
-
-  for (const { key, label, fmt } of STAT_METRICS) {
-    const val  = parseFloat(latest[key]);
-    const pval = prev ? parseFloat(prev[key]) : null;
-    const pct  = pval != null ? pctChange(pval, val) : null;
+  // Build cards
+  let cardIdx = 0;
+  const cardEls = {};
+  for (const m of METRICS) {
+    const latest = rows[rows.length - 1];
+    const curVal = latest ? parseFloat(latest[m.key]) : null;
+    const pk = peaks[m.key];
+    const cid = `${code}-${m.key}`;
 
     const card = document.createElement("div");
-    card.className = "stat";
+    card.className = "metric-card";
     card.innerHTML = `
-      <div class="label">${label}</div>
-      <div class="val" style="color:${color}">${isNaN(val) ? "n/a" : fmt(val)}</div>
-      <div class="sub">${latest.date}</div>
-      ${pct != null ? `<div class="delta ${pct >= 0 ? "up" : "down"}">${pct >= 0 ? "▲" : "▼"} ${Math.abs(pct).toFixed(1)}% vs prev day</div>` : ""}
+      <div class="mc-label">${m.label}</div>
+      <div class="mc-value">${curVal != null && !isNaN(curVal) ? m.fmt(curVal)+m.unit : "—"}</div>
+      <div class="mc-peak">All-time peak: <b>${pk.val != null ? m.fmt(pk.val)+m.unit : "—"}</b>${pk.date ? " <span style='color:#3a3f55'>"+pk.date+"</span>" : ""}</div>
+      <div class="mc-chart" style="height:72px;position:relative">
+        <canvas data-cid="${cid}" style="position:absolute;inset:0;width:100%;height:100%"></canvas>
+      </div>
     `;
-    row.appendChild(card);
-  }
-  container.appendChild(row);
-}
-
-function renderCharts(container, rows, color) {
-  const dates = rows.map(r => r.date);
-  const grid = document.createElement("div");
-  grid.className = "grid";
-
-  for (const { key, label } of CHART_METRICS) {
-    const values = rows.map(r => parseFloat(r[key]) || null);
-
-    const card = document.createElement("div");
-    card.className = "card";
-    card.innerHTML = `<h2>${label}</h2>`;
-    const canvas = document.createElement("canvas");
-    canvas.height = 140;
-    card.appendChild(canvas);
     grid.appendChild(card);
-
-    new Chart(canvas, {
-      type: "line",
-      data: {
-        labels: dates,
-        datasets: [{
-          data: values,
-          borderColor: color,
-          backgroundColor: color + "22",
-          borderWidth: 2,
-          pointRadius: 4,
-          pointBackgroundColor: color,
-          tension: 0.3,
-          fill: true,
-        }]
-      },
-      options: {
-        responsive: true,
-        plugins: { legend: { display: false } },
-        scales: {
-          x: {
-            ticks: { color: "#555", font: { size: 10 }, maxRotation: 45 },
-            grid: { color: "#1e1e2a" },
-          },
-          y: {
-            ticks: { color: "#555", font: { size: 10 } },
-            grid: { color: "#1e1e2a" },
-            beginAtZero: true,
-          }
-        }
-      }
-    });
+    cardEls[m.key] = card;
+    cardIdx++;
   }
-  container.appendChild(grid);
+
+  // Draw charts for given range
+  function redraw(range) {
+    const filtered = filterRange(rows, range);
+    const labels = filtered.map(r => rowLabel(r, range));
+    for (const m of METRICS) {
+      const canvas = section.querySelector(`canvas[data-cid="${code}-${m.key}"]`);
+      makeChart(canvas, labels, filtered.map(r => r[m.key]), meta.color);
+    }
+  }
+
+  // Time filter click
+  section.querySelectorAll(".tf-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      section.querySelectorAll(".tf-btn").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      activeRange = btn.dataset.range;
+      redraw(activeRange);
+    });
+  });
+
+  redraw(activeRange);
 }
 
-function renderComparisonChart(container, byIsland) {
-  const codes = Object.keys(byIsland).sort();
-  if (codes.length < 2) return;
+/* ── 24H Overview ── */
+function build24HOverview(byIsland, container) {
+  // Get latest row per island
+  const latestRows = Object.values(byIsland).map(rows => rows[rows.length - 1]).filter(Boolean);
+  if (!latestRows.length) return;
 
-  const header = document.createElement("div");
-  header.className = "island-header";
-  header.textContent = "Side-by-side Comparison";
-  container.appendChild(header);
+  const sum = key => latestRows.reduce((acc, r) => acc + (parseFloat(r[key]) || 0), 0);
+  const avg = key => sum(key) / latestRows.length;
 
-  const COMPARE = [
-    { key: "plays", label: "Plays" },
-    { key: "unique_players", label: "Unique Players" },
-    { key: "peak_ccu", label: "Peak CCU" },
+  const totalPlayers   = sum("unique_players");
+  const totalFavs      = sum("favorites");
+  const totalRecs      = sum("recommendations");
+  const totalMinutes   = sum("minutes_played");
+  const totalSessions  = sum("plays");
+  const favPer1k       = totalPlayers > 0 ? (totalFavs / totalPlayers * 1000) : 0;
+  const avgSessionTime = totalSessions > 0 ? (totalMinutes / totalSessions) : 0;
+  const avgPlaytime    = avg("avg_minutes_per_player");
+  const d1             = avg("retention_d1_pct");
+  const d7             = avg("retention_d7_pct");
+
+  const OVERVIEW_STATS = [
+    { label: "Unique Players",             val: fmtNum(totalPlayers),              sub: "combined" },
+    { label: "Favorites",                  val: fmtNum(totalFavs),                 sub: "combined" },
+    { label: "Favs per 1,000 Players",     val: favPer1k.toFixed(1),               sub: "" },
+    { label: "Recommendations",            val: fmtNum(totalRecs),                 sub: "combined" },
+    { label: "Average Playtime",           val: avgPlaytime.toFixed(1) + " min",   sub: "per player" },
+    { label: "Total Playtime",             val: fmtNum(totalMinutes) + " min",     sub: "combined" },
+    { label: "Avg Session Time",           val: avgSessionTime.toFixed(1) + " min",sub: "per session" },
+    { label: "Sessions",                   val: fmtNum(totalSessions),             sub: "combined" },
+    { label: "Day 1 Retention",            val: d1.toFixed(1) + "%",               sub: "avg" },
+    { label: "Day 7 Retention",            val: d7.toFixed(1) + "%",               sub: "avg" },
   ];
 
-  const grid = document.createElement("div");
-  grid.className = "grid";
+  const section = document.createElement("div");
+  section.className = "overview-section";
+  section.innerHTML = `<h2>24H Overview</h2><div class="overview-grid"></div>`;
+  container.appendChild(section);
 
-  for (const { key, label } of COMPARE) {
-    const allDates = [...new Set(codes.flatMap(c => byIsland[c].map(r => r.date)))].sort();
-
+  const grid = section.querySelector(".overview-grid");
+  for (const s of OVERVIEW_STATS) {
     const card = document.createElement("div");
-    card.className = "card";
-    card.innerHTML = `<h2>${label} — all islands</h2>`;
-    const canvas = document.createElement("canvas");
-    canvas.height = 140;
-    card.appendChild(canvas);
+    card.className = "ov-card";
+    card.innerHTML = `
+      <div class="ov-label">${s.label}</div>
+      <div class="ov-value">${s.val}</div>
+      ${s.sub ? `<div class="ov-sub">${s.sub}</div>` : ""}
+    `;
     grid.appendChild(card);
-
-    const datasets = codes.map(code => {
-      const meta = ISLANDS[code] || { name: code, color: "#aaa" };
-      const dataMap = Object.fromEntries(byIsland[code].map(r => [r.date, parseFloat(r[key]) || null]));
-      return {
-        label: meta.name,
-        data: allDates.map(d => dataMap[d] ?? null),
-        borderColor: meta.color,
-        backgroundColor: meta.color + "22",
-        borderWidth: 2,
-        pointRadius: 4,
-        pointBackgroundColor: meta.color,
-        tension: 0.3,
-        fill: false,
-      };
-    });
-
-    new Chart(canvas, {
-      type: "line",
-      data: { labels: allDates, datasets },
-      options: {
-        responsive: true,
-        plugins: {
-          legend: {
-            display: true,
-            labels: { color: "#aaa", font: { size: 11 } }
-          }
-        },
-        scales: {
-          x: { ticks: { color: "#555", font: { size: 10 }, maxRotation: 45 }, grid: { color: "#1e1e2a" } },
-          y: { ticks: { color: "#555", font: { size: 10 } }, grid: { color: "#1e1e2a" }, beginAtZero: true }
-        }
-      }
-    });
   }
-  container.appendChild(grid);
 }
 
+/* ── Main ── */
 async function main() {
   try {
-    const res = await fetch(CSV_URL);
-    if (!res.ok) throw new Error("fetch failed");
-    const text = await res.text();
-    const rows = parseCSV(text);
+    const res = await fetch("island_metrics_history.csv");
+    if (!res.ok) throw new Error();
+    const rows = parseCSV(await res.text());
     const byIsland = groupByIsland(rows);
 
     document.getElementById("loading").style.display = "none";
     const app = document.getElementById("app");
     app.style.display = "block";
 
-    const allDates = rows.map(r => r.date).sort();
-    document.getElementById("updated").textContent =
-      `Data from ${allDates[0]} to ${allDates[allDates.length - 1]}`;
-
-    for (const code of Object.keys(byIsland).sort()) {
-      const meta = ISLANDS[code] || { name: code, pill: "", color: "#aaa" };
-      const islandRows = byIsland[code];
-
-      const h = document.createElement("div");
-      h.className = "island-header";
-      h.innerHTML = `${meta.name} <span class="pill ${meta.pill}">${code}</span>`;
-      app.appendChild(h);
-
-      renderStats(app, islandRows, meta.color);
-      renderCharts(app, islandRows, meta.color);
+    // Last updated
+    const allTs = rows.map(r => r.fetched_at || r.date).filter(Boolean).sort();
+    if (allTs.length) {
+      document.getElementById("last-updated").textContent =
+        "Last updated " + allTs[allTs.length-1].replace("T", " ").slice(0, 16) + " UTC";
     }
 
-    renderComparisonChart(app, byIsland);
+    const codes = Object.keys(ISLANDS).filter(c => byIsland[c]);
 
-  } catch (e) {
+    codes.forEach((code, i) => {
+      buildIslandSection(code, byIsland[code], app);
+
+      // 24H Overview between the two islands
+      if (i === 0 && codes.length > 1) {
+        build24HOverview(byIsland, app);
+      }
+    });
+
+  } catch {
     document.getElementById("loading").style.display = "none";
-    document.getElementById("error").style.display = "block";
+    document.getElementById("error-msg").style.display = "block";
   }
 }
 
