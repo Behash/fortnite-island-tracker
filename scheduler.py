@@ -22,12 +22,10 @@ logging.basicConfig(
 log = logging.getLogger(__name__)
 
 
-def seconds_until_next_midnight():
+def seconds_until_next_hour():
     now = datetime.now(timezone.utc)
-    tomorrow = (now + timedelta(days=1)).replace(
-        hour=0, minute=0, second=0, microsecond=0
-    )
-    return (tomorrow - now).total_seconds()
+    next_hour = (now + timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)
+    return (next_hour - now).total_seconds()
 
 
 def run_fetch(island_code, today):
@@ -52,21 +50,25 @@ def run_fetch(island_code, today):
 
 def run_all():
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    log.info("Starting daily fetch for %d island(s) — %s", len(ISLAND_CODES), today)
+    log.info("Starting hourly fetch for %d island(s) — %s", len(ISLAND_CODES), today)
     for code in ISLAND_CODES:
         run_fetch(code, today)
     log.info("All fetches complete.")
 
 
 def main():
-    log.info("Scheduler started. Tracking %d island(s): %s", len(ISLAND_CODES), ", ".join(ISLAND_CODES))
+    log.info("Scheduler started (hourly). Tracking %d island(s): %s",
+             len(ISLAND_CODES), ", ".join(ISLAND_CODES))
     log.info("Data will be appended to: %s", CSV_FILE)
 
+    # Run immediately on start, then every hour
+    run_all()
+
     while True:
-        wait = seconds_until_next_midnight()
+        wait = seconds_until_next_hour()
         next_run = datetime.now(timezone.utc) + timedelta(seconds=wait)
-        log.info("Next run at %s UTC (in %.0f seconds / %.1f hours)",
-                 next_run.strftime("%Y-%m-%d %H:%M:%S"), wait, wait / 3600)
+        log.info("Next run at %s UTC (in %.0f seconds)",
+                 next_run.strftime("%Y-%m-%d %H:%M:%S"), wait)
         time.sleep(wait)
         run_all()
 
