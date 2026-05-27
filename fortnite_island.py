@@ -5,7 +5,7 @@ import urllib.parse
 import csv
 import sys
 import os
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 ISLAND_CODE = "9642-0223-9671"
 BASE_URL = "https://api.fortnite.com/ecosystem/v1/islands"
@@ -18,7 +18,11 @@ def fetch(url):
         return json.loads(response.read().decode())
 
 
-def write_csv(metrics, island_code, destination):
+def write_csv(metrics, island_code, destination, fetched_at=None):
+    if fetched_at is None:
+        now = datetime.now(timezone.utc)
+        fetched_at = now.strftime("%Y-%m-%dT%H:00:00")
+
     columns = [
         ("minutesPlayed",          "minutes_played"),
         ("uniquePlayers",          "unique_players"),
@@ -33,46 +37,57 @@ def write_csv(metrics, island_code, destination):
     for api_key, _ in columns:
         for entry in metrics.get(api_key, []):
             d = entry["timestamp"][:10]
-            by_date.setdefault(d, {})["_ts"] = d
+            by_date.setdefault(d, {})
             by_date[d][api_key] = entry["value"]
 
     for entry in metrics.get("retention", []):
         d = entry["timestamp"][:10]
-        by_date.setdefault(d, {})["_ts"] = d
+        by_date.setdefault(d, {})
         by_date[d]["retention_d1"] = round(entry.get("d1", 0) * 100, 1)
         by_date[d]["retention_d7"] = round(entry.get("d7", 0) * 100, 1)
 
-    fieldnames = ["date", "island_code"] + [col for _, col in columns] + ["retention_d1_pct", "retention_d7_pct"]
+    fieldnames = ["fetched_at", "date", "island_code"] + [col for _, col in columns] + ["retention_d1_pct", "retention_d7_pct"]
+
+    def make_row(d, row):
+        return {
+            "fetched_at": fetched_at,
+            "date": d,
+            "island_code": island_code,
+            **{col: row.get(api_key, "") for api_key, col in columns},
+            "retention_d1_pct": row.get("retention_d1", ""),
+            "retention_d7_pct": row.get("retention_d7", ""),
+        }
 
     if destination == "-":
-        out = sys.stdout
-        writer = csv.DictWriter(out, fieldnames=fieldnames)
+        writer = csv.DictWriter(sys.stdout, fieldnames=fieldnames)
         writer.writeheader()
         for d in sorted(by_date):
-            row = by_date[d]
-            writer.writerow({
-                "date": d,
-                "island_code": island_code,
-                **{col: row.get(api_key, "") for api_key, col in columns},
-                "retention_d1_pct": row.get("retention_d1", ""),
-                "retention_d7_pct": row.get("retention_d7", ""),
-            })
+            writer.writerow(make_row(d, by_date[d]))
     else:
+        # Load existing (island_code, fetched_at) pairs to deduplicate
+        existing = set()
         file_exists = os.path.isfile(destination) and os.path.getsize(destination) > 0
+        if file_exists:
+            with open(destination, newline="") as f:
+                for row in csv.DictReader(f):
+                    existing.add((row.get("island_code", ""), row.get("fetched_at", "")))
+
+        new_rows = [
+            make_row(d, by_date[d])
+            for d in sorted(by_date)
+            if (island_code, fetched_at) not in existing
+        ]
+
+        if not new_rows:
+            print(f"Skipped (already have data for {island_code} at {fetched_at})")
+            return
+
         with open(destination, "a", newline="") as out:
             writer = csv.DictWriter(out, fieldnames=fieldnames)
             if not file_exists:
                 writer.writeheader()
-            for d in sorted(by_date):
-                row = by_date[d]
-                writer.writerow({
-                    "date": d,
-                    "island_code": island_code,
-                    **{col: row.get(api_key, "") for api_key, col in columns},
-                    "retention_d1_pct": row.get("retention_d1", ""),
-                    "retention_d7_pct": row.get("retention_d7", ""),
-                })
-        print(f"CSV appended to: {destination}")
+            writer.writerows(new_rows)
+        print(f"CSV appended to: {destination}  ({len(new_rows)} row(s), fetched_at={fetched_at})")
 
 
 def print_timeseries(label, entries, value_key="value", fmt=lambda v: v):
